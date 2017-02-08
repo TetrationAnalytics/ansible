@@ -1,4 +1,4 @@
-%define name ansible1.9
+%define name ansible
 %define ansible_version $VERSION
 %define ansible_release $RELEASE
 
