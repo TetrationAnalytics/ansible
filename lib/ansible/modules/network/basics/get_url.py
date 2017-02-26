@@ -218,7 +218,7 @@ def url_filename(url):
         return 'index.html'
     return fn
 
-def url_get(module, url, dest, use_proxy, last_mod_time, force, timeout=10, headers=None, tmp_dest=''):
+def url_get(module, url, dest, use_proxy, last_mod_time, force, timeout=300, headers=None, tmp_dest=''):
     """
     Download data from the url and store in a temporary file.
 
