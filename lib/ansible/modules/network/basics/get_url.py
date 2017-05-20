@@ -218,7 +218,7 @@ def url_filename(url):
         return 'index.html'
     return fn
 
-def url_get(module, url, dest, use_proxy, last_mod_time, force, timeout=10, headers=None, tmp_dest=''):
+def url_get(module, url, dest, use_proxy, last_mod_time, force, timeout=2400, headers=None, tmp_dest=''):
     """
     Download data from the url and store in a temporary file.
 
@@ -293,7 +293,7 @@ def main():
         backup = dict(default=False, type='bool'),
         sha256sum = dict(default=''),
         checksum = dict(default=''),
-        timeout = dict(required=False, type='int', default=10),
+        timeout = dict(required=False, type='int', default=2400),
         headers = dict(required=False, default=None),
         tmp_dest = dict(required=False, default=''),
     )
