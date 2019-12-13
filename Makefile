@@ -50,7 +50,7 @@ endif
 
 # DEB build parameters
 DEBUILD_BIN ?= debuild
-DEBUILD_OPTS = --source-option="-I"
+DEBUILD_OPTS = --source-option="-I" -uc -us
 DPUT_BIN ?= dput
 DPUT_OPTS ?=
 DEB_DATE := $(shell date +"%a, %d %b %Y %T %z")

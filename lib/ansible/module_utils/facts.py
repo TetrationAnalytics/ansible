@@ -1,3 +1,25 @@
+import array
+import ConfigParser
+import datetime
+import errno
+import fcntl
+import fnmatch
+import getpass
+import glob
+import os
+import platform
+import pwd
+import re
+import signal
+import socket
+import stat
+import StringIO
+import struct
+import sys
+import time
+import traceback
+from string import maketrans
+
 # (c) 2012, Michael DeHaan <michael.dehaan@gmail.com>
 #
 # This file is part of Ansible
@@ -15,26 +37,7 @@
 # You should have received a copy of the GNU General Public License
 # along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
 
-import os
-import sys
-import stat
-import array
-import errno
-import fcntl
-import fnmatch
-import glob
-import platform
-import re
-import signal
-import socket
-import struct
-import datetime
-import getpass
-import pwd
-import ConfigParser
-import StringIO
 
-from string import maketrans
 
 try:
     import selinux
@@ -79,6 +82,39 @@ def timeout(seconds=10, error_message="Timer expired"):
         return wrapper
 
     return decorator
+
+# --------------------------------------------------------------
+# --------------------------------------------------------------
+# retry function to wrap around calls to get_mount_facts
+def retry_this(tries, delay=3, backoff=2):
+    """
+    delay specifies the amount of time to wait between retries
+    backoff specifies the multiplier for subsequent retry sleep waits
+    """
+    def func(original_func):
+        def retry(*args, **kwargs):
+            i = 0
+            lastexception = Exception()
+            mdelay = delay
+            while i < tries:
+                try:
+                    rv = original_func(*args, **kwargs)
+                    return rv
+                except Exception as e:
+                    traceback.print_exc()
+                    sys.stderr.write('%s() failed with exception %s\n' %
+                                     (original_func.__name__, repr(e)))
+                    lastexception = e
+                i += 1
+                if i < tries:
+                    sys.stderr.write('retry (%d/%d). sleeping %d seconds before retrying %s()\n' %
+                                     (i, tries, mdelay, original_func.__name__))
+                    time.sleep(mdelay)
+                mdelay *= backoff
+            raise lastexception
+        return retry
+    return func
+
 
 # --------------------------------------------------------------
 
@@ -876,7 +912,8 @@ class LinuxHardware(Hardware):
                 else:
                     self.facts[k] = 'NA'
 
-    @timeout(180)
+    @retry_this(10)
+    @timeout(10)
     def get_mount_facts(self):
         self.facts['mounts'] = []
         mtab = get_file_content('/etc/mtab', '')
