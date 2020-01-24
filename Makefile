@@ -80,7 +80,7 @@ RPMRELEASE = $(RELEASE)
 ifneq ($(OFFICIAL),yes)
     RPMRELEASE = 100.git$(DATE)
 endif
-RPMNVR = $(NAME)1.9-$(VERSION)-$(RPMRELEASE)$(RPMDIST)
+RPMNVR = $(NAME)-$(VERSION)-$(RPMRELEASE)$(RPMDIST)
 
 # MOCK build parameters
 MOCK_BIN ?= mock
