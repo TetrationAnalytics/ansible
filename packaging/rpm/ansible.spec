@@ -1,4 +1,4 @@
-%define name ansible1.9
+%define name ansible
 %define ansible_version $VERSION
 %define ansible_release $RELEASE
 
@@ -61,7 +61,7 @@ Requires: python-setuptools
 %endif
 
 # SuSE/openSuSE
-%if 0%{?suse_version} 
+%if 0%{?suse_version}
 BuildRequires: python-devel
 BuildRequires: python-setuptools
 Requires: python-paramiko

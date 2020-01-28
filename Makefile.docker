@@ -1,0 +1,14 @@
+launchdocker: docker_rpm docker_deb
+
+docker_rpm:
+	docker run --rm -it -v $(shell pwd):/tmp/ansible centos:7 /bin/bash -lc "cd /tmp/ansible/ && yum install -y make deltarpm epel-release && make -f Makefile.docker release_rpm"
+
+docker_deb:
+	docker run --rm -it -v $(shell pwd):/tmp/ansible ubuntu:14.04 /bin/bash -lc "cd /tmp/ansible/ && apt-get update && apt-get install -y devscripts build-essential cdbs debhelper asciidoc python-support cdbs debhelper asciidoc python python-support python-setuptools && make -f Makefile.docker release_deb"
+
+release_rpm:
+	yum install which git python-setuptools make rpm-devel rpm-build python2-devel asciidoc -y
+	OFFICIAL=yes make rpm
+
+release_deb:
+	OFFICIAL=yes DEB_DIST=trusty make deb

@@ -50,7 +50,7 @@ endif
 
 # DEB build parameters
 DEBUILD_BIN ?= debuild
-DEBUILD_OPTS = --source-option="-I"
+DEBUILD_OPTS = --source-option="-I" -uc -us
 DPUT_BIN ?= dput
 DPUT_OPTS ?=
 DEB_DATE := $(shell date +"%a, %d %b %Y %T %z")
@@ -80,7 +80,7 @@ RPMRELEASE = $(RELEASE)
 ifneq ($(OFFICIAL),yes)
     RPMRELEASE = 100.git$(DATE)
 endif
-RPMNVR = $(NAME)1.9-$(VERSION)-$(RPMRELEASE)$(RPMDIST)
+RPMNVR = $(NAME)-$(VERSION)-$(RPMRELEASE)$(RPMDIST)
 
 # MOCK build parameters
 MOCK_BIN ?= mock
