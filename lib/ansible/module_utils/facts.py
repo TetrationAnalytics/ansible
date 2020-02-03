@@ -19,6 +19,7 @@ import sys
 import time
 import traceback
 from string import maketrans
+from threading import Event, Timer
 
 # (c) 2012, Michael DeHaan <michael.dehaan@gmail.com>
 #
@@ -85,37 +86,118 @@ def timeout(seconds=10, error_message="Timer expired"):
 
 # --------------------------------------------------------------
 # --------------------------------------------------------------
-# retry function to wrap around calls to get_mount_facts
-def retry_this(tries, delay=3, backoff=2):
-    """
-    delay specifies the amount of time to wait between retries
-    backoff specifies the multiplier for subsequent retry sleep waits
-    """
-    def func(original_func):
-        def retry(*args, **kwargs):
-            i = 0
-            lastexception = Exception()
-            mdelay = delay
-            while i < tries:
-                try:
-                    rv = original_func(*args, **kwargs)
-                    return rv
-                except Exception as e:
-                    traceback.print_exc()
-                    sys.stderr.write('%s() failed with exception %s\n' %
-                                     (original_func.__name__, repr(e)))
-                    lastexception = e
-                i += 1
-                if i < tries:
-                    sys.stderr.write('retry (%d/%d). sleeping %d seconds before retrying %s()\n' %
-                                     (i, tries, mdelay, original_func.__name__))
-                    time.sleep(mdelay)
-                mdelay *= backoff
-            raise lastexception
-        return retry
-    return func
+def run_cmd(cmdargs, shell=False, run_user=None, cwd=None, timeout=None, stream_out=False, logger=None):
+    """Super command runner on steroids
 
+    Args:
+        cmdargs (string, list): command to execute, either preformatted as a
+            list or will automatically get split up using shlex.split
+        shell (bool, optional): Defaults to False. Run this command in a shell
+        run_user (string, optional): Defaults to None. Run command as user
+        cwd (string, optional): Defaults to None. Start command from this directory
+        timeout (int, optional): Defaults to None. Timeout in seconds for execution.
+            Note: if a process times out, the exit code will be -15
+        stream_out (bool, optional): Defaults to False. If True, stdout will be streamed
+            via logger as the output is returned.
+        logger (logging.Logger, optional): Defaults to None. Specifies logger target for
+            logging output
 
+    Returns:
+        tuple: Three part tuple containing return code, stdout and stderr
+    """
+
+    def kill(process, was_killed):
+        """Kills running process and all members of the process group
+
+        Args:
+            process (subprocess.Popen): Popen object for the process to be terminated
+        """
+
+        sys.stderr.write('Process execution for "%s" timed out' % cmdargs)
+        os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+        was_killed.set()
+
+    def set_privs():
+        try:
+            os.setsid()
+            if pw_record:
+                os.setuid(pw_record.pw_uid)
+                os.setgid(pw_record.pw_gid)
+        except Exception:
+            sys.stderr.write('Non-fatal exception encountered')
+            pass
+
+    def pipe_reader(pipe, q):
+        try:
+            with pipe:
+                for line in iter(pipe.readline, b''):
+                    q.put((pipe, line))
+        finally:
+            q.put(None)
+
+    kill_timer = None
+    env = os.environ.copy()
+    if not isinstance(cmdargs, list) and not shell:
+        cmdargs = shlex.split(cmdargs)
+    pw_record = None
+    if run_user:
+        pw_record = pwd.getpwnam(run_user)
+        env['HOME'] = pw_record.pw_dir
+        env['USER'] = pw_record.pw_name
+    sub = subprocess.Popen(
+        cmdargs, shell=shell, stdin=None, env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        preexec_fn=set_privs,
+        close_fds=True,
+        cwd=cwd)
+
+    if isinstance(timeout, int):
+        sys.stderr.write('Launching "{0}" with timeout "{1}"'.format(cmdargs, timeout))
+        was_killed = Event()
+        kill_timer = Timer(timeout, kill, [sub, was_killed])
+        kill_timer.start()
+
+    if not stream_out:
+        out, err = sub.communicate()
+        rc = sub.returncode
+        if kill_timer:
+            kill_timer.cancel()
+        return rc, str(out), str(err)
+
+    out = []
+    err = []
+    q = Queue()
+    Thread(target=pipe_reader, args=[sub.stdout, q]).start()
+    Thread(target=pipe_reader, args=[sub.stderr, q]).start()
+
+    done = 0
+    # done = 2 means both Threads have finished
+    while done != 2:
+        i = q.get()
+        if not i:
+            done += 1
+        else:
+            pipe, line = i
+            line = line.rstrip()
+            if pipe == sub.stdout:
+                name = 'stdout'
+                out.append(line)
+            if pipe == sub.stderr:
+                name = 'stderr'
+                err.append(line)
+            sys.stderr.write('{0}: "{1}"'.format(name, line))
+
+    # Wait for the subprocess to exit, and
+    sub.wait()
+    if kill_timer:
+        kill_timer.cancel()
+        if was_killed:
+            raise TimeoutError("Timer expired")
+    rc = sub.returncode
+    return rc, '\n'.join(out), '\n'.join(err)
+
+# --------------------------------------------------------------
 # --------------------------------------------------------------
 
 class Facts(object):
@@ -912,8 +994,6 @@ class LinuxHardware(Hardware):
                 else:
                     self.facts[k] = 'NA'
 
-    @retry_this(10)
-    @timeout(10)
     def get_mount_facts(self):
         self.facts['mounts'] = []
         mtab = get_file_content('/etc/mtab', '')
@@ -932,8 +1012,16 @@ class LinuxHardware(Hardware):
 
                     uuid = 'NA'
                     lsblkPath = module.get_bin_path("lsblk")
+                    rc = 0
                     if lsblkPath:
-                        rc, out, err = module.run_command("%s -ln --output UUID %s" % (lsblkPath, fields[0]), use_unsafe_shell=True)
+                        tries = 10
+                        while tries > 0:
+                            rc, out, err = run_cmd("%s -ln --output UUID %s" % (lsblkPath, fields[0]), shell=True, timeout=10)
+                            if rc == 0:
+                                break
+                            tries = tries - 1
+                        else:
+                            raise Exception('Error gathering lsblk results, exit code %d' % rc)
 
                         if rc == 0:
                             uuid = out.strip()
