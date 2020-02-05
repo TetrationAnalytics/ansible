@@ -113,7 +113,7 @@ def run_cmd(cmdargs, shell=False, run_user=None, cwd=None, timeout=None, stream_
             process (subprocess.Popen): Popen object for the process to be terminated
         """
 
-        sys.stderr.write('Process execution for "%s" timed out' % cmdargs)
+        # sys.stderr.write('Process execution for "%s" timed out' % cmdargs)
         os.killpg(os.getpgid(process.pid), signal.SIGTERM)
         was_killed.set()
 
@@ -124,7 +124,6 @@ def run_cmd(cmdargs, shell=False, run_user=None, cwd=None, timeout=None, stream_
                 os.setuid(pw_record.pw_uid)
                 os.setgid(pw_record.pw_gid)
         except Exception:
-            sys.stderr.write('Non-fatal exception encountered')
             pass
 
     def pipe_reader(pipe, q):
@@ -153,7 +152,6 @@ def run_cmd(cmdargs, shell=False, run_user=None, cwd=None, timeout=None, stream_
         cwd=cwd)
 
     if isinstance(timeout, int):
-        sys.stderr.write('Launching "{0}" with timeout "{1}"'.format(cmdargs, timeout))
         was_killed = Event()
         kill_timer = Timer(timeout, kill, [sub, was_killed])
         kill_timer.start()
@@ -186,7 +184,7 @@ def run_cmd(cmdargs, shell=False, run_user=None, cwd=None, timeout=None, stream_
             if pipe == sub.stderr:
                 name = 'stderr'
                 err.append(line)
-            sys.stderr.write('{0}: "{1}"'.format(name, line))
+           # sys.stderr.write('{0}: "{1}"'.format(name, line))
 
     # Wait for the subprocess to exit, and
     sub.wait()
